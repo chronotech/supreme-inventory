@@ -3,145 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Supreme INV | Material Control</title>
+    <title>Supreme Inventory | Vault</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;700;800&display=swap');
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #020617; color: white; min-height: 100vh; }
-        .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.05); }
-        .inv-card { border-top: 1px solid rgba(255,255,255,0.1); transition: 0.3s; }
-        .inv-card:hover { background: rgba(30, 41, 59, 0.6); }
-        .critical-glow { border-left: 4px solid #ef4444; background: rgba(239, 68, 68, 0.05); }
-        .healthy-glow { border-left: 4px solid #10b981; }
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 100; align-items: center; justify-content: center; padding: 1rem; backdrop-filter: blur(8px); }
+        body { background-color: #0f172a; color: white; font-family: 'Inter', sans-serif; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        .critical { border-left: 4px solid #ef4444; background: rgba(239, 68, 68, 0.1); }
+        .healthy { border-left: 4px solid #10b981; }
     </style>
 </head>
 <body class="p-4 md:p-8">
 
+    <script>
+        // PASTE YOUR GOOGLE DEPLOYMENT URL HERE
+        const API = 'https://script.google.com/macros/s/AKfycbyjGCLI2nRblR7djUY179RcVOiXzUn5_KluAzqpPcw/exec';
+    </script>
+
     <div class="max-w-5xl mx-auto">
-        <header class="flex justify-between items-end mb-10">
+        <header class="flex justify-between items-center mb-8">
             <div>
-                <h1 class="text-4xl font-800 uppercase italic tracking-tighter text-emerald-500">Material <span class="text-white">Vault</span></h1>
-                <p class="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Pillar 3: Inventory Control</p>
+                <h1 class="text-2xl font-bold text-amber-400">INVENTORY VAULT</h1>
+                <p class="text-slate-400 text-sm">Real-time Substrate & Ink Tracking</p>
             </div>
-            <div class="flex gap-2">
-                <button onclick="loadInventory()" class="p-4 bg-slate-900 rounded-2xl border border-slate-800 hover:bg-slate-800 transition">🔄 Sync</button>
-            </div>
+            <button onclick="loadInventory()" class="p-2 bg-slate-800 rounded-lg hover:bg-slate-700 transition">
+                🔄 Refresh
+            </button>
         </header>
 
-        <div class="mb-8">
-            <input type="text" id="invSearch" oninput="filterInv()" placeholder="Search SKU, Media, or Supplier..." class="w-full p-5 rounded-[2rem] bg-slate-900/50 border border-slate-800 outline-none focus:border-emerald-500 transition shadow-xl">
+        <div class="mb-6">
+            <input type="text" id="searchInput" onkeyup="filterInventory()" placeholder="Search items (Ink, Vinyl, Scrim...)" 
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500">
         </div>
 
-        <div id="inv-container" class="grid gap-4">
-            <div class="text-center py-20 text-slate-600 animate-pulse font-bold uppercase tracking-widest">Scanning Supreme Stock...</div>
-        </div>
-    </div>
-
-    <div id="reqModal" class="modal">
-        <div class="glass p-10 rounded-[3rem] w-full max-w-lg shadow-2xl">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-2xl font-800 uppercase italic">Quick <span class="text-blue-500">Request</span></h2>
-                <button onclick="closeModal()" class="text-slate-500 text-3xl">&times;</button>
-            </div>
-            <form id="reqForm" class="space-y-4">
-                <input type="text" id="reqItemName" class="w-full p-4 rounded-2xl bg-slate-900 border border-slate-800 opacity-50" readonly>
-                <div class="grid grid-cols-2 gap-4">
-                    <input type="number" id="reqQty" placeholder="Qty" class="w-full p-4 rounded-2xl bg-slate-800 border-none" required>
-                    <input type="text" id="reqJobId" placeholder="Job ID" class="w-full p-4 rounded-2xl bg-slate-800 border-none" required>
-                </div>
-                <input type="text" id="reqStaff" placeholder="Your Name" class="w-full p-4 rounded-2xl bg-slate-800 border-none" required>
-                <button type="submit" id="reqBtn" class="w-full py-5 bg-emerald-600 rounded-2xl font-900 uppercase italic transition active:scale-95">Confirm Requisition</button>
-            </form>
+        <div id="inventory-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="animate-pulse text-slate-500">Connecting to Supreme Brain...</div>
         </div>
     </div>
 
     <script>
-        const API = 'https://script.google.com/macros/s/AKfycbyjGCLI2nRblR7djUY179RcVOiXzUn5_KluAzqpPcw/exec';
-        let fullInventory = [];
+        let inventoryData = [];
 
         async function loadInventory() {
             try {
-                const res = await fetch(`${API}?action=GET_FULL_INV`);
-                fullInventory = await res.json();
-                renderInventory(fullInventory);
-            } catch (e) {
-                document.getElementById('inv-container').innerHTML = `<p class="text-center text-red-500 font-bold uppercase">Sync Failed: Check API</p>`;
+                const response = await fetch(`${API}?action=GET_FULL_INV`);
+                inventoryData = await response.json();
+                renderInventory(inventoryData);
+            } catch (err) {
+                document.getElementById('inventory-grid').innerHTML = `<p class="text-red-400">Connection Error. Check API URL.</p>`;
             }
         }
 
-        function renderInventory(items) {
-            const container = document.getElementById('inv-container');
-            container.innerHTML = items.map(i => {
-                const isCritical = i.stock.current <= i.stock.min;
-                const statusColor = isCritical ? 'text-red-500' : 'text-emerald-500';
+        function renderInventory(data) {
+            const grid = document.getElementById('inventory-grid');
+            grid.innerHTML = '';
+
+            data.forEach(item => {
+                const isCritical = item.stock.current <= item.stock.min;
+                const card = document.createElement('div');
+                card.className = `glass p-6 rounded-2xl ${isCritical ? 'critical' : 'healthy'}`;
                 
-                return `
-                <div class="inv-card glass p-6 rounded-[2rem] flex flex-col md:flex-row justify-between items-center gap-6 ${isCritical ? 'critical-glow' : 'healthy-glow'}">
-                    <div class="flex-1">
-                        <p class="text-[9px] font-black text-slate-500 uppercase tracking-widest">${i.sku}</p>
-                        <h3 class="text-xl font-800 uppercase italic">${i.name}</h3>
-                        <p class="text-[10px] text-slate-400 font-bold uppercase mt-1">Supplier: ${i.metadata.supplier || 'General Supply'}</p>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4 w-full md:w-auto text-center px-6 border-x border-white/5">
+                card.innerHTML = `
+                    <div class="flex justify-between items-start">
                         <div>
-                            <p class="text-[8px] font-black text-slate-500 uppercase">On Hand</p>
-                            <p class="text-xl font-800 ${statusColor}">${i.stock.current} <span class="text-[10px] uppercase font-bold text-slate-400">${i.stock.unit}</span></p>
+                            <h3 class="font-bold text-lg">${item.name}</h3>
+                            <p class="text-xs text-slate-500 font-mono">${item.sku}</p>
                         </div>
+                        <span class="px-2 py-1 rounded text-xs font-bold ${isCritical ? 'bg-red-500 text-white' : 'bg-emerald-500/20 text-emerald-400'}">
+                            ${isCritical ? 'LOW STOCK' : 'OK'}
+                        </span>
+                    </div>
+                    <div class="mt-6 flex items-end justify-between">
                         <div>
-                            <p class="text-[8px] font-black text-slate-500 uppercase">Min Buffer</p>
-                            <p class="text-xl font-800">${i.stock.min}</p>
+                            <p class="text-xs text-slate-400 uppercase">Current Stock</p>
+                            <p class="text-3xl font-bold">${item.stock.current} <span class="text-sm font-normal text-slate-500">${item.stock.unit}</span></p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs text-slate-500 uppercase">Min. Level</p>
+                            <p class="font-semibold">${item.stock.min}</p>
                         </div>
                     </div>
-
-                    <div class="flex gap-2 w-full md:w-auto">
-                        <button onclick="openReqModal('${i.name}')" class="flex-1 md:flex-none px-6 py-3 bg-emerald-600/10 text-emerald-500 rounded-xl text-[10px] font-black uppercase border border-emerald-500/20 hover:bg-emerald-600 hover:text-white transition">Req</button>
-                    </div>
-                </div>
                 `;
-            }).join('');
+                grid.appendChild(card);
+            });
         }
 
-        function filterInv() {
-            const query = document.getElementById('invSearch').value.toLowerCase();
-            const filtered = fullInventory.filter(i => 
-                i.name.toLowerCase().includes(query) || 
-                i.sku.toLowerCase().includes(query) ||
-                (i.metadata.supplier && i.metadata.supplier.toLowerCase().includes(query))
-            );
+        function filterInventory() {
+            const term = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = inventoryData.filter(i => i.name.toLowerCase().includes(term));
             renderInventory(filtered);
         }
 
-        function openReqModal(name) {
-            document.getElementById('reqItemName').value = name;
-            document.getElementById('reqModal').style.display = 'flex';
-        }
-
-        function closeModal() { document.getElementById('reqModal').style.display = 'none'; }
-
-        document.getElementById('reqForm').onsubmit = async (e) => {
-            e.preventDefault();
-            const btn = document.getElementById('reqBtn');
-            btn.innerText = "RECORDING..."; btn.disabled = true;
-
-            const payload = {
-                action: 'CREATE_REQUISITION',
-                item: document.getElementById('reqItemName').value,
-                qty: document.getElementById('reqQty').value,
-                jobId: document.getElementById('reqJobId').value,
-                staff: document.getElementById('reqStaff').value,
-                loc: "Shop Floor" // Default for Inventory App
-            };
-
-            await fetch(API, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
-            alert("Requisition Recorded Successfully.");
-            closeModal();
-            loadInventory();
-            btn.innerText = "Confirm Requisition"; btn.disabled = false;
-        };
-
-        loadInventory();
+        window.onload = loadInventory;
     </script>
 </body>
 </html>
