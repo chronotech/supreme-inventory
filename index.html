@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supreme INV | Material Control</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;700;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #020617; color: white; min-height: 100vh; }
+        .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.05); }
+        .inv-card { border-top: 1px solid rgba(255,255,255,0.1); transition: 0.3s; }
+        .inv-card:hover { background: rgba(30, 41, 59, 0.6); }
+        .critical-glow { border-left: 4px solid #ef4444; background: rgba(239, 68, 68, 0.05); }
+        .healthy-glow { border-left: 4px solid #10b981; }
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 100; align-items: center; justify-content: center; padding: 1rem; backdrop-filter: blur(8px); }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-5xl mx-auto">
+        <header class="flex justify-between items-end mb-10">
+            <div>
+                <h1 class="text-4xl font-800 uppercase italic tracking-tighter text-emerald-500">Material <span class="text-white">Vault</span></h1>
+                <p class="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Pillar 3: Inventory Control</p>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="loadInventory()" class="p-4 bg-slate-900 rounded-2xl border border-slate-800 hover:bg-slate-800 transition">🔄 Sync</button>
+            </div>
+        </header>
+
+        <div class="mb-8">
+            <input type="text" id="invSearch" oninput="filterInv()" placeholder="Search SKU, Media, or Supplier..." class="w-full p-5 rounded-[2rem] bg-slate-900/50 border border-slate-800 outline-none focus:border-emerald-500 transition shadow-xl">
+        </div>
+
+        <div id="inv-container" class="grid gap-4">
+            <div class="text-center py-20 text-slate-600 animate-pulse font-bold uppercase tracking-widest">Scanning Supreme Stock...</div>
+        </div>
+    </div>
+
+    <div id="reqModal" class="modal">
+        <div class="glass p-10 rounded-[3rem] w-full max-w-lg shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-800 uppercase italic">Quick <span class="text-blue-500">Request</span></h2>
+                <button onclick="closeModal()" class="text-slate-500 text-3xl">&times;</button>
+            </div>
+            <form id="reqForm" class="space-y-4">
+                <input type="text" id="reqItemName" class="w-full p-4 rounded-2xl bg-slate-900 border border-slate-800 opacity-50" readonly>
+                <div class="grid grid-cols-2 gap-4">
+                    <input type="number" id="reqQty" placeholder="Qty" class="w-full p-4 rounded-2xl bg-slate-800 border-none" required>
+                    <input type="text" id="reqJobId" placeholder="Job ID" class="w-full p-4 rounded-2xl bg-slate-800 border-none" required>
+                </div>
+                <input type="text" id="reqStaff" placeholder="Your Name" class="w-full p-4 rounded-2xl bg-slate-800 border-none" required>
+                <button type="submit" id="reqBtn" class="w-full py-5 bg-emerald-600 rounded-2xl font-900 uppercase italic transition active:scale-95">Confirm Requisition</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API = 'https://script.google.com/macros/s/AKfycbyjGCLI2nRblR7djUY179RcVOiXzUn5_KluAzqpPcw/exec';
+        let fullInventory = [];
+
+        async function loadInventory() {
+            try {
+                const res = await fetch(`${API}?action=GET_FULL_INV`);
+                fullInventory = await res.json();
+                renderInventory(fullInventory);
+            } catch (e) {
+                document.getElementById('inv-container').innerHTML = `<p class="text-center text-red-500 font-bold uppercase">Sync Failed: Check API</p>`;
+            }
+        }
+
+        function renderInventory(items) {
+            const container = document.getElementById('inv-container');
+            container.innerHTML = items.map(i => {
+                const isCritical = i.stock.current <= i.stock.min;
+                const statusColor = isCritical ? 'text-red-500' : 'text-emerald-500';
+                
+                return `
+                <div class="inv-card glass p-6 rounded-[2rem] flex flex-col md:flex-row justify-between items-center gap-6 ${isCritical ? 'critical-glow' : 'healthy-glow'}">
+                    <div class="flex-1">
+                        <p class="text-[9px] font-black text-slate-500 uppercase tracking-widest">${i.sku}</p>
+                        <h3 class="text-xl font-800 uppercase italic">${i.name}</h3>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase mt-1">Supplier: ${i.metadata.supplier || 'General Supply'}</p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 w-full md:w-auto text-center px-6 border-x border-white/5">
+                        <div>
+                            <p class="text-[8px] font-black text-slate-500 uppercase">On Hand</p>
+                            <p class="text-xl font-800 ${statusColor}">${i.stock.current} <span class="text-[10px] uppercase font-bold text-slate-400">${i.stock.unit}</span></p>
+                        </div>
+                        <div>
+                            <p class="text-[8px] font-black text-slate-500 uppercase">Min Buffer</p>
+                            <p class="text-xl font-800">${i.stock.min}</p>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2 w-full md:w-auto">
+                        <button onclick="openReqModal('${i.name}')" class="flex-1 md:flex-none px-6 py-3 bg-emerald-600/10 text-emerald-500 rounded-xl text-[10px] font-black uppercase border border-emerald-500/20 hover:bg-emerald-600 hover:text-white transition">Req</button>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function filterInv() {
+            const query = document.getElementById('invSearch').value.toLowerCase();
+            const filtered = fullInventory.filter(i => 
+                i.name.toLowerCase().includes(query) || 
+                i.sku.toLowerCase().includes(query) ||
+                (i.metadata.supplier && i.metadata.supplier.toLowerCase().includes(query))
+            );
+            renderInventory(filtered);
+        }
+
+        function openReqModal(name) {
+            document.getElementById('reqItemName').value = name;
+            document.getElementById('reqModal').style.display = 'flex';
+        }
+
+        function closeModal() { document.getElementById('reqModal').style.display = 'none'; }
+
+        document.getElementById('reqForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('reqBtn');
+            btn.innerText = "RECORDING..."; btn.disabled = true;
+
+            const payload = {
+                action: 'CREATE_REQUISITION',
+                item: document.getElementById('reqItemName').value,
+                qty: document.getElementById('reqQty').value,
+                jobId: document.getElementById('reqJobId').value,
+                staff: document.getElementById('reqStaff').value,
+                loc: "Shop Floor" // Default for Inventory App
+            };
+
+            await fetch(API, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+            alert("Requisition Recorded Successfully.");
+            closeModal();
+            loadInventory();
+            btn.innerText = "Confirm Requisition"; btn.disabled = false;
+        };
+
+        loadInventory();
+    </script>
+</body>
+</html>
